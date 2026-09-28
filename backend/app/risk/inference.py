@@ -1,7 +1,11 @@
 """
-inference.py — ML Inference Service (singleton)
+inference.py - ML Inference Service (singleton)
 Loaded once at FastAPI startup via lifespan.
 Provides predict() and explain() for any backend router.
+
+Engine B: AI/ML Risk Prediction.
+Uses the existing UCI-trained Random Forest model.
+The heuristic fallback uses SIES GST academic fields.
 """
 import os
 import json
@@ -15,13 +19,15 @@ MODEL_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', '..', '..', 'ml', 'model')
 )
 
-# Risk level thresholds (mirrored from config.py defaults)
-RISK_LOW_MAX = 0.40
-RISK_MED_MAX = 0.70
+# Risk level thresholds (updated: 4 levels)
+RISK_LOW_MAX = 0.25       # 0-24% = LOW
+RISK_MED_MAX = 0.50       # 25-49% = MEDIUM
+RISK_HIGH_MAX = 0.75      # 50-74% = HIGH
+                          # 75-100% = CRITICAL
 
 
 class ModelService:
-    """Singleton that owns the loaded sklearn/xgboost model and scaler."""
+    """Singleton that owns the loaded sklearn model and scaler."""
 
     _instance: Optional['ModelService'] = None
 
@@ -48,7 +54,7 @@ class ModelService:
 
         if not os.path.exists(model_path):
             logger.warning(
-                "ML model not found at %s — inference will return placeholder scores. "
+                "ML model not found at %s - inference will use rule-based fallback. "
                 "Run: python ml/preprocess.py && python ml/train.py", model_path
             )
             return
@@ -101,11 +107,9 @@ class ModelService:
             X = self._feature_vector(student_data)
             X_scaled = self.scaler.transform(X)
 
-            # Tree-based models → TreeExplainer; linear → LinearExplainer
             try:
                 explainer = shap.TreeExplainer(self.model)
                 shap_values = explainer.shap_values(X_scaled)
-                # For binary classifiers, shap_values may be [neg_class, pos_class]
                 if isinstance(shap_values, list):
                     sv = shap_values[1][0]
                 else:
@@ -114,7 +118,6 @@ class ModelService:
                 explainer = shap.LinearExplainer(self.model, X_scaled)
                 sv = explainer.shap_values(X_scaled)[0]
 
-            # Sort by absolute impact
             pairs = sorted(zip(self.features, sv), key=lambda x: abs(x[1]), reverse=True)
             factors = []
             for feat, val in pairs[:5]:
@@ -128,46 +131,149 @@ class ModelService:
                 })
             return factors
         except Exception as exc:
-            logger.warning("SHAP explanation failed: %s — using rule-based fallback", exc)
+            logger.warning("SHAP explanation failed: %s - using rule-based fallback", exc)
             return self._rule_explain(student_data)
 
     @staticmethod
     def _level(prob: float) -> str:
+        """Map probability to risk level (4 levels)."""
         if prob < RISK_LOW_MAX:
             return 'LOW'
         elif prob < RISK_MED_MAX:
             return 'MEDIUM'
-        return 'HIGH'
+        elif prob < RISK_HIGH_MAX:
+            return 'HIGH'
+        return 'CRITICAL'
 
     @staticmethod
     def _heuristic_predict(data: dict) -> dict:
-        """Simple rule-based fallback when no trained model is available."""
-        score = 0.2
-        if float(data.get('attendance', 100)) < 75:
+        """
+        Rule-based fallback using SIES GST academic fields.
+        Uses all available fields for a comprehensive heuristic.
+        """
+        score = 0.10  # baseline
+
+        # Attendance
+        att = float(data.get('attendance', data.get('attendance_percentage', 100)))
+        if att < 60:
             score += 0.25
-        if int(data.get('failed_subjects', 0)) >= 2:
-            score += 0.20
-        if float(data.get('gpa', 10)) < 5:
+        elif att < 75:
             score += 0.15
-        if float(data.get('assignment_completion', 100)) < 60:
+        elif att < 80:
+            score += 0.05
+
+        # Failed subjects
+        fs = int(data.get('failed_subjects', 0))
+        if fs >= 4:
+            score += 0.20
+        elif fs >= 2:
+            score += 0.12
+
+        # Failed heads (SIES GST specific)
+        fh = int(data.get('failed_heads', 0))
+        if fh >= 8:
+            score += 0.20
+        elif fh >= 5:
+            score += 0.12
+        elif fh >= 3:
+            score += 0.06
+
+        # ESE failed heads
+        ese_fh = int(data.get('ese_failed_heads', 0))
+        if ese_fh >= 5:
+            score += 0.15
+        elif ese_fh >= 3:
+            score += 0.08
+
+        # GPA
+        gpa = float(data.get('gpa', 10))
+        if gpa < 4:
+            score += 0.15
+        elif gpa < 5:
+            score += 0.08
+        elif gpa < 6:
+            score += 0.03
+
+        # Assignment completion
+        ac = float(data.get('assignment_completion',
+                            data.get('assignment_completion_percentage', 100)))
+        if ac < 40:
             score += 0.10
+        elif ac < 60:
+            score += 0.05
+
+        # Previous backlogs
+        prev = int(data.get('previous_backlogs', 0))
+        if prev >= 4:
+            score += 0.10
+        elif prev >= 2:
+            score += 0.05
+
+        # Credit gap
+        earned = float(data.get('earned_credits', 0))
+        expected = float(data.get('expected_credits', 0))
+        if expected > 0:
+            credit_pct = earned / expected * 100
+            if credit_pct < 50:
+                score += 0.12
+            elif credit_pct < 70:
+                score += 0.06
+
+        # Backlog credits
+        bc = float(data.get('backlog_credits', 0))
+        if bc >= 15:
+            score += 0.08
+        elif bc >= 8:
+            score += 0.04
+
         prob = min(score, 0.95)
         return {
             'risk_probability': round(prob, 4),
             'risk_level': ModelService._level(prob),
-            'model_version': 'heuristic-v0',
+            'model_version': 'heuristic-v2-siesgst',
         }
 
     @staticmethod
     def _rule_explain(data: dict) -> list[dict]:
-        """Rule-based explanations when SHAP is unavailable."""
+        """Rule-based explanations using SIES GST fields."""
         factors = []
-        if float(data.get('attendance', 100)) < 75:
-            factors.append({'feature': 'attendance', 'impact': 'high', 'direction': 'increases_risk', 'shap_value': 0.0})
-        if int(data.get('failed_subjects', 0)) >= 2:
-            factors.append({'feature': 'failed_subjects', 'impact': 'high', 'direction': 'increases_risk', 'shap_value': 0.0})
-        if float(data.get('assignment_completion', 100)) < 60:
-            factors.append({'feature': 'assignment_completion', 'impact': 'medium', 'direction': 'increases_risk', 'shap_value': 0.0})
-        if float(data.get('gpa', 10)) < 5:
-            factors.append({'feature': 'gpa', 'impact': 'medium', 'direction': 'increases_risk', 'shap_value': 0.0})
-        return factors or [{'feature': 'gpa', 'impact': 'low', 'direction': 'reduces_risk', 'shap_value': 0.0}]
+
+        att = float(data.get('attendance', data.get('attendance_percentage', 100)))
+        if att < 75:
+            factors.append({'feature': 'attendance', 'impact': 'high',
+                          'direction': 'increases_risk', 'shap_value': 0.0})
+
+        fs = int(data.get('failed_subjects', 0))
+        if fs >= 2:
+            factors.append({'feature': 'failed_subjects', 'impact': 'high',
+                          'direction': 'increases_risk', 'shap_value': 0.0})
+
+        fh = int(data.get('failed_heads', 0))
+        if fh >= 5:
+            factors.append({'feature': 'failed_heads', 'impact': 'high',
+                          'direction': 'increases_risk', 'shap_value': 0.0})
+
+        ese_fh = int(data.get('ese_failed_heads', 0))
+        if ese_fh >= 3:
+            factors.append({'feature': 'ese_failed_heads', 'impact': 'high',
+                          'direction': 'increases_risk', 'shap_value': 0.0})
+
+        ac = float(data.get('assignment_completion',
+                            data.get('assignment_completion_percentage', 100)))
+        if ac < 60:
+            factors.append({'feature': 'assignment_completion', 'impact': 'medium',
+                          'direction': 'increases_risk', 'shap_value': 0.0})
+
+        gpa = float(data.get('gpa', 10))
+        if gpa < 5:
+            factors.append({'feature': 'gpa', 'impact': 'medium',
+                          'direction': 'increases_risk', 'shap_value': 0.0})
+
+        earned = float(data.get('earned_credits', 0))
+        expected = float(data.get('expected_credits', 0))
+        if expected > 0 and (earned / expected * 100) < 70:
+            factors.append({'feature': 'credit_completion', 'impact': 'medium',
+                          'direction': 'increases_risk', 'shap_value': 0.0})
+
+        return factors or [{'feature': 'gpa', 'impact': 'low',
+                           'direction': 'reduces_risk', 'shap_value': 0.0}]

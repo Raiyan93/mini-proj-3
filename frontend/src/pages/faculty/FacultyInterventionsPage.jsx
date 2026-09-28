@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useInterventions, useStudents } from '../../services/hooks'
 import { IVStatusBadge, Spinner, ErrorBanner } from '../../components/ui'
 import api from '../../services/api'
+import authService from '../../services/auth'
 import { Plus, X } from 'lucide-react'
 
 const STATUSES    = ['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'FOLLOW_UP']
@@ -142,7 +143,16 @@ export default function FacultyInterventionsPage() {
                 <select value={iv.status} disabled={updating === iv.id}
                   onChange={e => updateStatus(iv.id, e.target.value)}
                   style={{ fontSize: '0.8rem', padding: '0.3rem 0.55rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', cursor: 'pointer' }}>
-                  {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                  {STATUSES
+                      .filter(s => {
+                        const role = authService.getRole()
+                        if (role === 'faculty' && (s === 'IN_PROGRESS' || s === 'COMPLETED')) {
+                          return iv.status === s;
+                        }
+                        return true;
+                      })
+                      .map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)
+                    }
                 </select>
               </div>
             ))}

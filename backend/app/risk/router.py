@@ -1,5 +1,5 @@
 """
-Risk router — POST predict, GET current/history/explanation.
+Risk router - POST predict, GET current/history/explanation.
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -55,23 +55,34 @@ def _latest_credit(student_id: int, db: Session) -> Optional[CreditRecord]:
 
 def _build_feature_dict(academic: Optional[AcademicRecord], credit: Optional[CreditRecord]) -> dict:
     """Map DB records to the feature dict the inference service expects."""
+    if not academic:
+        return {}
+    
     return {
-        'attendance':           float(academic.attendance)            if academic else 50.0,
-        'marks':                float(academic.marks)                 if academic else 50.0,
-        'gpa':                  float(academic.gpa)                   if academic else 5.0,
-        'assignment_completion': float(academic.assignment_completion) if academic else 50.0,
-        'failed_subjects':      int(academic.failed_subjects)         if academic else 0,
+        'attendance': float(academic.attendance) if academic.attendance is not None else 100.0,
+        'attendance_percentage': float(academic.attendance) if academic.attendance is not None else 100.0,
+        'marks': float(academic.marks) if academic.marks is not None else 50.0,
+        'gpa': float(academic.gpa) if academic.gpa is not None else 10.0,
+        'assignment_completion': float(academic.assignment_completion) if academic.assignment_completion is not None else 100.0,
+        'assignment_completion_percentage': float(academic.assignment_completion) if academic.assignment_completion is not None else 100.0,
+        'failed_subjects': int(academic.failed_subjects) if academic.failed_subjects is not None else 0,
+        'failed_heads': int(academic.failed_heads) if getattr(academic, 'failed_heads', None) is not None else 0,
+        'ese_failed_heads': int(academic.ese_failed_heads) if getattr(academic, 'ese_failed_heads', None) is not None else 0,
+        'previous_backlogs': int(academic.previous_backlogs) if getattr(academic, 'previous_backlogs', None) is not None else 0,
+        'earned_credits': float(credit.earned_credits) if credit and credit.earned_credits is not None else 0.0,
+        'expected_credits': float(credit.expected_credits) if credit and credit.expected_credits is not None else 0.0,
+        'backlog_credits': float(credit.backlog_credits) if credit and credit.backlog_credits is not None else 0.0,
     }
 
 
 def _intervention_adjustment(student_id: int, db: Session) -> tuple[float, int]:
     """
     Reduce risk probability for each recently-completed intervention.
-    Rationale: a completed intervention means support was delivered —
+    Rationale: a completed intervention means support was delivered -
     that genuinely reduces dropout likelihood.
 
     Returns (reduction_fraction, completed_count).
-    Each completed intervention in the last 60 days → 8% reduction,
+    Each completed intervention in the last 60 days -> 8% reduction,
     capped at 30% total.
     """
     from datetime import timedelta
@@ -107,26 +118,28 @@ def predict_risk(
     svc    = ModelService.get()
     result = svc.predict(features)
 
-    # Apply intervention adjustment — completed plans reduce risk
+    # Apply intervention adjustment - completed plans reduce risk
     adj_reduction, completed_count = _intervention_adjustment(student_id, db)
     raw_prob     = result['risk_probability']
     adj_prob     = round(max(raw_prob - (raw_prob * adj_reduction), 0.03), 4)
 
     # Recompute level from adjusted probability
-    if adj_prob < 0.40:
-        adj_level = 'LOW'
-    elif adj_prob < 0.70:
-        adj_level = 'MEDIUM'
-    else:
-        adj_level = 'HIGH'
+    adj_level = ModelService._level(adj_prob)
 
-    level_map = {'LOW': RiskLevel.low, 'MEDIUM': RiskLevel.medium, 'HIGH': RiskLevel.high}
+    level_map = {
+        'LOW': RiskLevel.low, 
+        'MEDIUM': RiskLevel.medium, 
+        'HIGH': RiskLevel.high,
+        'CRITICAL': RiskLevel.critical
+    }
+    
     snapshot = RiskHistory(
         student_id=student_id,
         probability=adj_prob,
         risk_level=level_map[adj_level],
         model_version=result['model_version'],
         calculated_at=datetime.now(timezone.utc),
+        risk_type='ML'
     )
     db.add(snapshot)
     db.commit()
@@ -143,7 +156,7 @@ def predict_risk(
         response['intervention_note'] = (
             f'{completed_count} completed intervention(s) reduced risk by '
             f'{round(adj_reduction * 100)}% '
-            f'(raw: {round(raw_prob * 100)}% → adjusted: {round(adj_prob * 100)}%)'
+            f'(raw: {round(raw_prob * 100)}% -> adjusted: {round(adj_prob * 100)}%)'
         )
     return response
 
@@ -160,10 +173,19 @@ def get_current_risk(
 
     latest = (
         db.query(RiskHistory)
-        .filter(RiskHistory.student_id == student_id)
+        .filter(RiskHistory.student_id == student_id, RiskHistory.risk_type == 'ML')
         .order_by(desc(RiskHistory.calculated_at))
         .first()
     )
+    if not latest:
+        # Fallback to older records without risk_type
+        latest = (
+            db.query(RiskHistory)
+            .filter(RiskHistory.student_id == student_id)
+            .order_by(desc(RiskHistory.calculated_at))
+            .first()
+        )
+        
     if not latest:
         raise HTTPException(status_code=404, detail='No risk score yet. Run /predict first.')
 
@@ -182,7 +204,7 @@ def get_risk_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return all risk snapshots ordered oldest→newest (for trend charts)."""
+    """Return all risk snapshots ordered oldest->newest (for trend charts)."""
     profile = _get_student_profile(student_id, db)
     _check_access(profile, current_user)
 
@@ -197,6 +219,7 @@ def get_risk_history(
             'week':             i + 1,
             'risk_probability': float(r.probability),
             'risk_level':       r.risk_level.value,
+            'risk_type':        r.risk_type,
             'calculated_at':    r.calculated_at.isoformat() if r.calculated_at else None,
         }
         for i, r in enumerate(rows)
@@ -224,4 +247,5 @@ def get_explanation(
         'student_id':  student_id,
         'top_factors': factors,
         'method':      'shap' if svc.loaded else 'rule_based',
+        'disclaimer': 'These are predictive factors and do not themselves determine official progression eligibility.'
     }

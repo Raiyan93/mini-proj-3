@@ -44,6 +44,7 @@ def get_summary(
 
     if role == UserRole.admin:
         total_students = db.query(StudentProfile).count()
+        critical_risk  = latest_risk.filter(RiskHistory.risk_level == RiskLevel.critical).count()
         high_risk      = latest_risk.filter(RiskHistory.risk_level == RiskLevel.high).count()
         active_ivs     = db.query(Intervention).filter(
             Intervention.status.in_([InterventionStatus.pending, InterventionStatus.in_progress])
@@ -53,6 +54,7 @@ def get_summary(
         return {
             'role':            'admin',
             'total_students':  total_students,
+            'critical_risk':   critical_risk,
             'high_risk':       high_risk,
             'active_interventions': active_ivs,
             'total_users':     total_users,
@@ -81,6 +83,7 @@ def get_summary(
                 'open_interventions': 0,
             }
 
+        critical = latest_risk.filter(RiskHistory.student_id.in_(assigned_ids), RiskHistory.risk_level == RiskLevel.critical).count()
         high   = latest_risk.filter(RiskHistory.student_id.in_(assigned_ids), RiskHistory.risk_level == RiskLevel.high).count()
         medium = latest_risk.filter(RiskHistory.student_id.in_(assigned_ids), RiskHistory.risk_level == RiskLevel.medium).count()
         low    = latest_risk.filter(RiskHistory.student_id.in_(assigned_ids), RiskHistory.risk_level == RiskLevel.low).count()
@@ -92,6 +95,7 @@ def get_summary(
         return {
             'role':            role.value,
             'total_assigned':  total,
+            'critical_risk':   critical,
             'high_risk':       high,
             'medium_risk':     medium,
             'low_risk':        low,
@@ -138,4 +142,5 @@ def get_summary(
             'credit_completion_pct': cs['completion_pct'] if cs else None,
             'credit_status':    cs['status'] if cs else None,
             'open_actions':     open_actions,
+            'academic_status':  profile.academic_status,
         }

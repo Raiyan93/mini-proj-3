@@ -30,6 +30,7 @@ from app.risk.router import router as risk_router
 from app.credits.router import router as credits_router
 from app.interventions.router import router as interventions_router
 from app.dashboard.router import router as dashboard_router
+from app.regulations.router import router as regulations_router, progression_router
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -71,6 +72,8 @@ app.include_router(risk_router)
 app.include_router(credits_router)
 app.include_router(interventions_router)
 app.include_router(dashboard_router)
+app.include_router(regulations_router)
+app.include_router(progression_router)
 
 
 @app.get("/health")

@@ -1,5 +1,5 @@
 """
-Students router — role-filtered list/detail + admin creation.
+Students router - role-filtered list/detail + admin creation.
 SDK Section 5: GET /api/students, GET /api/students/{id}, POST /api/students
 SDK Section 14: Least-privilege rules enforced at query level.
 """
@@ -32,7 +32,7 @@ def _get_latest_risk_level(student_id: int, db: Session) -> str | None:
 
 
 def _build_student_detail(user: User, profile: StudentProfile, db: Session = None) -> dict:
-    return {
+    res = {
         "id": user.id,
         "email": user.email,
         "name": user.name,
@@ -45,7 +45,42 @@ def _build_student_detail(user: User, profile: StudentProfile, db: Session = Non
         "mentor_id": profile.mentor_id,
         "is_demo": profile.is_demo,
         "latest_risk_level": _get_latest_risk_level(profile.student_id, db) if db else None,
+        "branch": profile.branch,
+        "admission_year": profile.admission_year,
+        "current_year": profile.current_year,
+        "regulation": profile.regulation,
+        "academic_status": profile.academic_status,
     }
+    
+    # Add latest academic record if we have a db session
+    if db:
+        from app.db.models import AcademicRecord
+        from sqlalchemy import desc
+        latest_acad = (
+            db.query(AcademicRecord)
+            .filter(AcademicRecord.student_id == profile.student_id)
+            .order_by(desc(AcademicRecord.recorded_at))
+            .first()
+        )
+        if latest_acad:
+            res["latest_academic_record"] = {
+                "term": latest_acad.term,
+                "attendance": latest_acad.attendance,
+                "marks": latest_acad.marks,
+                "gpa": latest_acad.gpa,
+                "assignment_completion": latest_acad.assignment_completion,
+                "failed_subjects": latest_acad.failed_subjects,
+                "ise_marks": latest_acad.ise_marks,
+                "mse_marks": latest_acad.mse_marks,
+                "ese_marks": latest_acad.ese_marks,
+                "failed_heads": latest_acad.failed_heads,
+                "ese_failed_heads": latest_acad.ese_failed_heads,
+                "backlog_credits": latest_acad.backlog_credits,
+                "previous_backlogs": latest_acad.previous_backlogs,
+                "previous_failed_heads": latest_acad.previous_failed_heads,
+            }
+            
+    return res
 
 
 @router.get("", response_model=List[StudentDetailResponse])
@@ -57,10 +92,10 @@ def list_students(
 ):
     """
     Role-filtered student list (SDK Section 14):
-    - admin  → all students
-    - faculty → students assigned to this faculty in StudentFaculty
-    - mentor → students whose mentor_id == current_user.id
-    - student → only themselves
+    - admin  -> all students
+    - faculty -> students assigned to this faculty in StudentFaculty
+    - mentor -> students whose mentor_id == current_user.id
+    - student -> only themselves
     """
     role = current_user.role
 
@@ -193,6 +228,10 @@ def create_student(
         semester=payload.semester,
         mentor_id=payload.mentor_id,
         is_demo=payload.is_demo,
+        branch=payload.branch,
+        admission_year=payload.admission_year,
+        current_year=payload.current_year,
+        regulation=payload.regulation,
     )
     db.add(profile)
     db.commit()

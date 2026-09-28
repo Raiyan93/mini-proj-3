@@ -16,9 +16,9 @@ _counter = itertools.count(200)
 def _make_csv(rows, headers=None):
     """Build in-memory CSV bytes for multipart upload."""
     if headers is None:
-        headers = ['roll_no', 'term', 'attendance', 'marks', 'gpa',
-                   'assignment_completion', 'failed_subjects',
-                   'earned_credits', 'expected_credits', 'required_credits']
+        headers = ['roll_no', 'branch', 'admission_year', 'current_year', 'semester', 'regulation',
+                   'attendance_percentage', 'gpa', 'ise_marks', 'mse_marks', 'ese_marks',
+                   'assignment_completion_percentage', 'earned_credits', 'expected_credits']
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=headers)
     writer.writeheader()
@@ -29,10 +29,11 @@ def _make_csv(rows, headers=None):
 
 def _valid_row(roll_no):
     return {
-        'roll_no': roll_no, 'term': '2024-S2',
-        'attendance': 85, 'marks': 75, 'gpa': 7.5,
-        'assignment_completion': 80, 'failed_subjects': 0,
-        'earned_credits': 25, 'expected_credits': 30, 'required_credits': 30,
+        'roll_no': roll_no, 'branch': 'CE', 'admission_year': 2021, 'current_year': 3, 'semester': 5,
+        'regulation': 'R19', 'attendance_percentage': 85, 'gpa': 7.5,
+        'ise_marks': 20, 'mse_marks': 15, 'ese_marks': 40,
+        'assignment_completion_percentage': 80,
+        'earned_credits': 25, 'expected_credits': 30
     }
 
 

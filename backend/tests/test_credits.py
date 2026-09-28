@@ -15,13 +15,13 @@ def test_on_track():
 
 def test_at_risk():
     result = compute_credits(earned=22, expected=30, required=30)
-    assert result['status'] == 'AT_RISK'
+    assert result['status'] == 'DEFICIENT'
     assert result['deficit'] == 8
 
 
 def test_deficit():
     result = compute_credits(earned=12, expected=30, required=30)
-    assert result['status'] == 'DEFICIT'
+    assert result['status'] == 'CRITICAL'
     assert result['deficit'] == 18
     assert result['completion_pct'] == 40.0
 

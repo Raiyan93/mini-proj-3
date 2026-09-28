@@ -7,7 +7,7 @@ import { useDashboard } from '../../services/hooks'
 import { Spinner, ErrorBanner, ProgressBar } from '../../components/ui'
 import { TrendingUp, CreditCard, Target, BookOpen } from 'lucide-react'
 
-const RISK_COLOR = { HIGH: '#f43f5e', MEDIUM: '#f59e0b', LOW: '#10b981' }
+const RISK_COLOR = { CRITICAL: '#991b1b', HIGH: '#f43f5e', MEDIUM: '#f59e0b', LOW: '#10b981' }
 
 export default function StudentDashboard() {
   const user = authService.getUser()
@@ -34,11 +34,19 @@ export default function StudentDashboard() {
               <p style={{ margin: '0 0 0.25rem', fontSize: '2rem', fontWeight: 800, color: riskColor }}>
                 {data?.risk_level ?? '—'}
               </p>
-              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Dropout Risk</p>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Predicted Risk</p>
               {data?.risk_probability != null && (
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: riskColor }}>
                   {Math.round(data.risk_probability * 100)}% probability
                 </p>
+              )}
+              {data?.academic_status && (
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Official Status</p>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {data.academic_status.replace('_', ' ')}
+                  </p>
+                </div>
               )}
             </div>
 

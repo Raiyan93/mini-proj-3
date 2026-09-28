@@ -66,7 +66,7 @@ export default function StudentsAdminPage() {
       {showForm && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 100, overflowY: 'auto', padding: '2rem 1rem',
         }}>
           <div className="card" style={{ width: '100%', maxWidth: 460, flexShrink: 0 }}>

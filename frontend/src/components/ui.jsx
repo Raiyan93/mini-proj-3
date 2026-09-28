@@ -69,6 +69,25 @@ const IV_COLORS = {
   PENDING: '#f59e0b', ASSIGNED: '#3b82f6',
   IN_PROGRESS: '#8b5cf6', COMPLETED: '#10b981', FOLLOW_UP: '#06b6d4',
 }
+export function ProgressionBadge({ status }) {
+  if (!status) return null
+  const colors = {
+    CLEAR: '#10b981',
+    ACADEMIC_RISK: '#f59e0b',
+    HIGH_RISK: '#f97316',
+    CRITICAL_RISK: '#991b1b',
+    PROGRESSION_BLOCKED: '#f43f5e',
+    ATTENDANCE_BLOCKED: '#f43f5e',
+    REGULATION_UNRESOLVED: '#64748b'
+  }
+  const color = colors[status] || '#64748b'
+  return (
+    <span style={{ backgroundColor: color + '22', color: color, padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>
+      {status.replace('_', ' ')}
+    </span>
+  )
+}
+
 export function IVStatusBadge({ status }) {
   const color = IV_COLORS[status] || '#6b7280'
   return (

@@ -48,7 +48,7 @@ export default function UploadsPage() {
       <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem' }}>
         <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
           <strong style={{ color: 'var(--text-secondary)' }}>Required columns:</strong>{' '}
-          <code style={{ color: '#3b82f6' }}>roll_no, attendance, marks, gpa, assignment_completion, failed_subjects, earned_credits, expected_credits, required_credits</code>
+          <code style={{ color: '#3b82f6' }}>roll_no, branch, admission_year, current_year, semester, regulation, attendance_percentage, gpa, ise_marks, mse_marks, ese_marks, assignment_completion_percentage, earned_credits, expected_credits</code>
         </p>
       </div>
 

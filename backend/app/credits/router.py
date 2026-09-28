@@ -45,12 +45,14 @@ def get_credits(
 
     cs = compute_credits(record.earned_credits, record.expected_credits, record.required_credits)
     return {
-        'student_id':     student_id,
-        'period':         record.period,
-        'earned':         cs['earned'],
-        'expected':       cs['expected'],
-        'required':       cs['required'],
-        'completion_pct': cs['completion_pct'],
-        'deficit':        cs['deficit'],
-        'status':         cs['status'],
+        'student_id':      student_id,
+        'period':          record.period,
+        'earned':          cs['earned'],
+        'expected':        cs['expected'],
+        'required':        cs['required'],
+        'completion_pct':  cs['completion_pct'],
+        'deficit':         cs['deficit'],
+        'credit_gap':      cs['deficit'],
+        'backlog_credits': float(record.backlog_credits or 0),
+        'status':          cs['status'],
     }

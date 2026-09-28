@@ -76,3 +76,8 @@ export function useInterventions(studentId) {
 export function useCourses() {
   return useFetch('/courses')
 }
+
+/** Progression */
+export function useProgression(studentId) {
+  return useFetch(studentId ? `/students/${studentId}/progression` : null)
+}

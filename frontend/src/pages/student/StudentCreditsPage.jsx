@@ -2,17 +2,19 @@
  * StudentCreditsPage — credit progress and deficit visualization.
  */
 import authService from '../../services/auth'
-import { useCredits } from '../../services/hooks'
-import { Spinner, ErrorBanner, ProgressBar } from '../../components/ui'
+import { useCredits, useProgression } from '../../services/hooks'
+import { Spinner, ErrorBanner, ProgressBar, ProgressionBadge } from '../../components/ui'
 import { CreditCard } from 'lucide-react'
 
-const STATUS_COLOR = { ON_TRACK: '#10b981', AT_RISK: '#f59e0b', DEFICIT: '#f43f5e' }
+const STATUS_COLOR = { ON_TRACK: '#10b981', AT_RISK: '#f59e0b', DEFICIT: '#f43f5e', CRITICAL: '#991b1b' }
 
 export default function StudentCreditsPage() {
   const user = authService.getUser()
-  const { data: credits, loading, error } = useCredits(user?.student_id)
+  const { data: credits, loading: cLoad, error: cErr } = useCredits(user?.student_id)
+  const { data: prog, loading: pLoad, error: pErr } = useProgression(user?.student_id)
 
-  if (loading) return <Spinner text="Loading credits…" />
+  if (cLoad || pLoad) return <Spinner text="Loading credits..." />
+  const error = cErr || pErr
 
   const color = STATUS_COLOR[credits?.status] || 'var(--text-muted)'
 
@@ -51,7 +53,8 @@ export default function StudentCreditsPage() {
                 ['Earned Credits',   credits.earned,   '#10b981'],
                 ['Expected Credits', credits.expected, '#3b82f6'],
                 ['Required Credits', credits.required, '#8b5cf6'],
-                ['Deficit',          credits.deficit,  '#f43f5e'],
+                ['Credit Gap',       credits.credit_gap ?? credits.deficit,  '#f59e0b'],
+                ['Backlog Credits',  credits.backlog_credits ?? 0, '#f43f5e'],
               ].map(([label, val, col]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                   <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{label}</span>
@@ -63,7 +66,10 @@ export default function StudentCreditsPage() {
 
           {/* Guidance */}
           <div className="card">
-            <p style={{ margin: '0 0 1rem', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>GUIDANCE</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+               <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>GUIDANCE & PROGRESSION</p>
+               {prog && <ProgressionBadge status={prog.status} />}
+            </div>
             {credits.status === 'ON_TRACK' && (
               <p style={{ color: '#10b981', fontSize: '0.875rem' }}>✓ Great work! You are on track with your credit requirements. Keep it up!</p>
             )}

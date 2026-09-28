@@ -23,6 +23,7 @@ router = APIRouter(prefix='/api/students', tags=['academics'])
 
 
 class AcademicUpdateRequest(BaseModel):
+    # Core fields
     attendance:            float
     marks:                 float
     gpa:                   float
@@ -32,6 +33,15 @@ class AcademicUpdateRequest(BaseModel):
     expected_credits:      float
     required_credits:      float
     term:                  Optional[str] = None
+    # SIES GST extended fields
+    ise_marks:             Optional[float] = None
+    mse_marks:             Optional[float] = None
+    ese_marks:             Optional[float] = None
+    failed_heads:          Optional[int]   = 0
+    ese_failed_heads:      Optional[int]   = 0
+    backlog_credits:       Optional[float] = 0.0
+    previous_backlogs:     Optional[int]   = 0
+    previous_failed_heads: Optional[int]   = 0
 
 
 @router.patch('/{student_id}/academic')
@@ -68,6 +78,14 @@ def update_academic(
         gpa=body.gpa,
         assignment_completion=body.assignment_completion,
         failed_subjects=body.failed_subjects,
+        ise_marks=body.ise_marks,
+        mse_marks=body.mse_marks,
+        ese_marks=body.ese_marks,
+        failed_heads=body.failed_heads or 0,
+        ese_failed_heads=body.ese_failed_heads or 0,
+        backlog_credits=body.backlog_credits or 0.0,
+        previous_backlogs=body.previous_backlogs or 0,
+        previous_failed_heads=body.previous_failed_heads or 0,
         recorded_at=now,
     )
     db.add(academic)
@@ -82,9 +100,21 @@ def update_academic(
         expected_credits=cs['expected'],
         required_credits=cs['required'],
         deficit=cs['deficit'],
+        backlog_credits=body.backlog_credits or 0.0,
+        credit_gap=cs['deficit'],
+        credit_completion_pct=cs['completion_pct'],
     )
     db.add(credit)
     db.flush()
+
+    # Run regulation engine (Engine A) and update academic_status
+    from app.regulations.engine import evaluate_progression
+    try:
+        prog_result = evaluate_progression(student_id, db, profile.regulation)
+        profile.academic_status = prog_result.get('status', 'CLEAR')
+        db.flush()
+    except Exception:
+        pass  # Non-fatal: regulation eval failure should not block record save
 
     # Inference
     features = {
@@ -96,13 +126,19 @@ def update_academic(
     }
     svc    = ModelService.get()
     result = svc.predict(features)
-    level_map = {'LOW': RiskLevel.low, 'MEDIUM': RiskLevel.medium, 'HIGH': RiskLevel.high}
+    level_map = {
+        'LOW':      RiskLevel.low,
+        'MEDIUM':   RiskLevel.medium,
+        'HIGH':     RiskLevel.high,
+        'CRITICAL': RiskLevel.high,  # Map CRITICAL to high for RiskHistory enum
+    }
 
     snapshot = RiskHistory(
         student_id=student_id,
         probability=result['risk_probability'],
-        risk_level=level_map[result['risk_level']],
+        risk_level=level_map.get(result['risk_level'], RiskLevel.low),
         model_version=result['model_version'],
+        risk_type='ML',
         calculated_at=now,
     )
     db.add(snapshot)
@@ -130,11 +166,12 @@ def update_academic(
     db.commit()
 
     return {
-        'student_id':     student_id,
-        'risk_probability': result['risk_probability'],
-        'risk_level':     result['risk_level'],
-        'credit_status':  cs['status'],
-        'completion_pct': cs['completion_pct'],
+        'student_id':              student_id,
+        'risk_probability':        result['risk_probability'],
+        'risk_level':              result['risk_level'],
+        'credit_status':           cs['status'],
+        'completion_pct':          cs['completion_pct'],
         'interventions_triggered': len(triggered),
-        'updated_at':     now.isoformat(),
+        'academic_status':         profile.academic_status,
+        'updated_at':              now.isoformat(),
     }
