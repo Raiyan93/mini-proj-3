@@ -115,6 +115,9 @@ class StudentProfile(Base):
     current_year = Column(Integer, nullable=True)
     regulation = Column(String(20), nullable=True)
     academic_status = Column(String(30), nullable=True, default="CLEAR")
+    is_dse = Column(Boolean, default=False, nullable=True, comment="Direct Second Year entrant")
+    activity_points = Column(Integer, default=85, nullable=True, comment="AICTE activity points earned")
+    ncmc_cleared = Column(Boolean, default=True, nullable=True, comment="Non-credit mandatory courses")
 
     user = relationship("User", back_populates="student_profile", foreign_keys=[user_id])
     mentor = relationship("User", back_populates="mentored_students", foreign_keys=[mentor_id])
@@ -127,6 +130,8 @@ class StudentProfile(Base):
     faculty_assignments = relationship("StudentFaculty", back_populates="student")
     course_results = relationship("CourseResult", back_populates="student")
     progression_evaluations = relationship("ProgressionEvaluation", back_populates="student")
+    simulations = relationship("StudentSimulation", back_populates="student",
+                               order_by="StudentSimulation.created_at.desc()")
 
     def __repr__(self):
         return f"<StudentProfile roll_no={self.roll_no} program={self.program}>"
@@ -188,6 +193,10 @@ class AcademicRecord(Base):
     ise_marks = Column(Float, nullable=True)
     mse_marks = Column(Float, nullable=True)
     ese_marks = Column(Float, nullable=True)
+    tw_marks = Column(Float, nullable=True, comment="Term Work marks out of 25")
+    pr_or_marks = Column(Float, nullable=True, comment="Practical/Oral marks out of 25")
+    grace_marks = Column(Float, nullable=True, default=0.0, comment="Awarded under O.5042 / O.5045")
+    ordinance_applied = Column(String(50), nullable=True)
     failed_heads = Column(Integer, nullable=True, default=0)
     ese_failed_heads = Column(Integer, nullable=True, default=0)
     previous_backlogs = Column(Integer, nullable=True, default=0)
@@ -214,12 +223,18 @@ class CourseResult(Base):
     ise_marks = Column(Float, nullable=True)
     mse_marks = Column(Float, nullable=True)
     ese_marks = Column(Float, nullable=True)
+    tw_marks = Column(Float, nullable=True, comment="Term Work marks out of 25")
+    pr_or_marks = Column(Float, nullable=True, comment="Practical/Oral marks out of 25")
+    grace_marks = Column(Float, nullable=True, default=0.0)
+    ordinance_applied = Column(String(50), nullable=True)
     total_marks = Column(Float, nullable=True)
     percentage = Column(Float, nullable=True)
     grade = Column(String(5), nullable=True)
     grade_point = Column(Float, nullable=True)
     is_failed = Column(Boolean, default=False)
     is_ese_failed = Column(Boolean, default=False)
+    is_tw_failed = Column(Boolean, default=False)
+    is_pr_failed = Column(Boolean, default=False)
     attendance_percentage = Column(Float, nullable=True)
     recorded_at = Column(DateTime, default=datetime.utcnow)
     student = relationship("StudentProfile", back_populates="course_results")
@@ -300,6 +315,20 @@ class Intervention(Base):
                     default=InterventionStatus.pending, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Enhanced Individualized & Progress Tracking fields
+    target_course_code = Column(String(50), nullable=True)
+    target_course_name = Column(String(255), nullable=True)
+    progress_pct = Column(Integer, default=0, nullable=False)
+    milestone_goal = Column(String(255), nullable=True)
+    action_checklist = Column(JSON, nullable=True)
+
+    # Closed-loop efficacy & outcome tracking (2025/2026 Prescriptive Retention)
+    baseline_risk_prob = Column(Float, nullable=True, default=0.0)
+    current_risk_prob = Column(Float, nullable=True, default=0.0)
+    risk_delta = Column(Float, nullable=True, default=0.0)
+    efficacy_status = Column(String(50), nullable=True, default='EVALUATING')
+
     student = relationship("StudentProfile", back_populates="interventions")
     assigned_user = relationship("User", foreign_keys=[assigned_to])
     updates = relationship("InterventionUpdate", back_populates="intervention",
@@ -325,3 +354,28 @@ class InterventionUpdate(Base):
 
     def __repr__(self):
         return f"<InterventionUpdate intervention={self.intervention_id} actor={self.actor_id}>"
+
+
+class StudentSimulation(Base):
+    """Logs student 'What-If' scenarios and counterfactual goal commitments."""
+    __tablename__ = "student_simulations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("student_profiles.student_id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    current_risk_prob = Column(Float, nullable=False)
+    simulated_risk_prob = Column(Float, nullable=False)
+    risk_delta = Column(Float, nullable=False)
+    target_attendance = Column(Float, nullable=False)
+    target_marks = Column(Float, nullable=False)
+    target_assignments = Column(Float, nullable=False)
+    target_backlogs_cleared = Column(Integer, default=0)
+    target_ese_score = Column(Float, nullable=True)
+    is_committed = Column(Boolean, default=False)
+    notes = Column(Text, nullable=True)
+
+    student = relationship("StudentProfile", back_populates="simulations")
+
+    def __repr__(self):
+        return f"<StudentSimulation student={self.student_id} delta={self.risk_delta}>"
+

@@ -60,9 +60,15 @@ class StudentDetailResponse(BaseModel):
     current_year: Optional[int] = None
     regulation: Optional[str] = None
     academic_status: Optional[str] = None
+    is_dse: Optional[bool] = False
+    activity_points: Optional[int] = None
+    ncmc_cleared: Optional[bool] = None
     
     # We will pass the latest academic record here so the frontend can populate the form
     latest_academic_record: Optional[dict] = None
+    academic_records: Optional[list[dict]] = None
+    course_results: Optional[list[dict]] = None
+    sies_gst_audit: Optional[dict] = None
 
     class Config:
         from_attributes = True

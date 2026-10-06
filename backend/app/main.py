@@ -1,5 +1,5 @@
 """
-FastAPI application entry point — Phase 2.
+FastAPI application entry point — Phase 2 (SIES GST AcademiQ).
 
 Routers:
   /api/auth, /api/me       — authentication

@@ -31,7 +31,8 @@ REQUIRED_COLS = {
 
 OPTIONAL_COLS = {
     'course_code', 'course_name', 'credits', 'failed_subjects', 'failed_heads',
-    'ese_failed_heads', 'previous_backlogs'
+    'ese_failed_heads', 'previous_backlogs', 'tw_marks', 'pr_or_marks', 'is_dse',
+    'activity_points'
 }
 
 def _parse_file(file: UploadFile) -> Any:
@@ -72,13 +73,21 @@ def _validate_row(row: dict) -> list[str]:
     except (TypeError, ValueError):
         errors.append('attendance_percentage is missing or not numeric')
 
-    for mark_col in ['ise_marks', 'mse_marks', 'ese_marks']:
-        try:
-            val = float(row.get(mark_col, 0))
-            if val < 0:
-                errors.append(f'{mark_col} must be >= 0')
-        except (TypeError, ValueError):
-            errors.append(f'{mark_col} is missing or not numeric')
+    limits = {
+        'ise_marks': 20.0,
+        'mse_marks': 20.0,
+        'ese_marks': 60.0,
+        'tw_marks': 25.0,
+        'pr_or_marks': 25.0,
+    }
+    for mark_col, max_val in limits.items():
+        if mark_col in row and row.get(mark_col) not in ('', None, 'nan'):
+            try:
+                val = float(row.get(mark_col, 0))
+                if not (0 <= val <= max_val):
+                    errors.append(f'{mark_col} must be between 0 and {max_val}')
+            except (TypeError, ValueError):
+                errors.append(f'{mark_col} is missing or not numeric')
             
     for cred_col in ['earned_credits', 'expected_credits']:
         try:
@@ -196,10 +205,12 @@ def upload_academic(
             attendance=float(row_dict['attendance_percentage']),
             marks=float(row_dict['gpa']) * 10, # rough approximation if marks not provided
             gpa=float(row_dict['gpa']),
-            assignment_completion=float(row_dict['assignment_completion_percentage']),
-            ise_marks=float(row_dict['ise_marks']),
-            mse_marks=float(row_dict['mse_marks']),
-            ese_marks=float(row_dict['ese_marks']),
+            assignment_completion=min(100.0, max(0.0, float(row_dict['assignment_completion_percentage']))),
+            ise_marks=min(20.0, max(0.0, float(row_dict['ise_marks']))),
+            mse_marks=min(20.0, max(0.0, float(row_dict['mse_marks']))),
+            ese_marks=min(60.0, max(0.0, float(row_dict['ese_marks']))),
+            tw_marks=min(25.0, max(0.0, float(row_dict['tw_marks']))) if 'tw_marks' in row_dict and row_dict['tw_marks'] != '' and str(row_dict['tw_marks']) != 'nan' else None,
+            pr_or_marks=min(25.0, max(0.0, float(row_dict['pr_or_marks']))) if 'pr_or_marks' in row_dict and row_dict['pr_or_marks'] != '' and str(row_dict['pr_or_marks']) != 'nan' else None,
             failed_subjects=int(float(row_dict.get('failed_subjects', 0))),
             failed_heads=int(float(row_dict.get('failed_heads', 0))),
             ese_failed_heads=int(float(row_dict.get('ese_failed_heads', 0))),
@@ -209,22 +220,30 @@ def upload_academic(
         db.add(academic)
         db.flush()
         
-        # Course results (optional)
+        # Course results (optional, upsert to prevent duplicates)
         course_code = str(row_dict.get('course_code', '')).strip()
         if course_code and course_code != 'nan':
-            cr = CourseResult(
-                student_id=profile.student_id,
-                semester=profile.semester,
-                course_code=course_code,
-                course_name=str(row_dict.get('course_name', '')),
-                credits=int(float(row_dict.get('credits', 3))),
-                ise_marks=float(row_dict.get('ise_marks', 0)),
-                mse_marks=float(row_dict.get('mse_marks', 0)),
-                ese_marks=float(row_dict.get('ese_marks', 0)),
-                attendance_percentage=float(row_dict.get('attendance_percentage', 100)),
-                recorded_at=now
-            )
-            db.add(cr)
+            cr = db.query(CourseResult).filter(
+                CourseResult.student_id == profile.student_id,
+                CourseResult.course_code == course_code,
+                CourseResult.semester == profile.semester
+            ).first()
+            if not cr:
+                cr = CourseResult(
+                    student_id=profile.student_id,
+                    semester=profile.semester,
+                    course_code=course_code,
+                    course_name=str(row_dict.get('course_name', '')),
+                )
+                db.add(cr)
+            cr.credits = int(float(row_dict.get('credits', 3)))
+            cr.ise_marks = min(20.0, max(0.0, float(row_dict.get('ise_marks', 0))))
+            cr.mse_marks = min(20.0, max(0.0, float(row_dict.get('mse_marks', 0))))
+            cr.ese_marks = min(60.0, max(0.0, float(row_dict.get('ese_marks', 0))))
+            cr.tw_marks = min(25.0, max(0.0, float(row_dict['tw_marks']))) if 'tw_marks' in row_dict and row_dict['tw_marks'] != '' and str(row_dict['tw_marks']) != 'nan' else None
+            cr.pr_or_marks = min(25.0, max(0.0, float(row_dict['pr_or_marks']))) if 'pr_or_marks' in row_dict and row_dict['pr_or_marks'] != '' and str(row_dict['pr_or_marks']) != 'nan' else None
+            cr.attendance_percentage = float(row_dict.get('attendance_percentage', 100))
+            cr.recorded_at = now
             db.flush()
 
         # Persist credit record

@@ -6,11 +6,14 @@ import { useState } from 'react'
 import { useFetch } from '../../services/hooks'
 import { Spinner, ErrorBanner } from '../../components/ui'
 import api from '../../services/api'
-import { Plus, BookOpen } from 'lucide-react'
+import authService from '../../services/auth'
+import { Plus, BookOpen, User } from 'lucide-react'
 
 export default function CoursesPage() {
+  const user = authService.getUser()
+  const isAdmin = user?.role === 'admin'
   const { data: courses, loading, error, refetch } = useFetch('/courses')
-  const { data: faculty } = useFetch('/users?role=faculty')
+  const { data: faculty } = useFetch(isAdmin ? '/users?role=faculty' : null)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formErr, setFormErr] = useState(null)
@@ -41,9 +44,9 @@ export default function CoursesPage() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="page-title">Courses</h1>
-          <p className="page-subtitle">Manage course catalog and assign faculty</p>
+          <p className="page-subtitle">{isAdmin ? 'Manage course catalog and assign faculty' : 'Curriculum course catalog'}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={15} /> New Course</button>
+        {isAdmin && <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={15} /> New Course</button>}
       </div>
 
       {error && <ErrorBanner message={error} />}
@@ -101,13 +104,20 @@ export default function CoursesPage() {
               </div>
               <div>
                 <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Assigned Faculty</label>
-                <select
-                  defaultValue={c.faculty_id || ''}
-                  onChange={e => assignFaculty(c.course_id, e.target.value)}
-                  style={{ width: '100%', padding: '0.45rem 0.65rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '0.375rem', color: 'var(--text-primary)', fontSize: '0.8125rem' }}>
-                  <option value="">— Unassigned —</option>
-                  {(faculty || []).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                </select>
+                {isAdmin ? (
+                  <select
+                    defaultValue={c.faculty_id || ''}
+                    onChange={e => assignFaculty(c.course_id, e.target.value)}
+                    style={{ width: '100%', padding: '0.45rem 0.65rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '0.375rem', color: 'var(--text-primary)', fontSize: '0.8125rem' }}>
+                    <option value="">— Unassigned —</option>
+                    {(faculty || []).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.45rem 0.65rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '0.375rem', fontSize: '0.8125rem', color: c.faculty_name ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                    <User size={13} color="var(--text-muted)" />
+                    <span>{c.faculty_name || '— Unassigned —'}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}

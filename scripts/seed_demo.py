@@ -249,36 +249,61 @@ def seed():
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ml'))
 
-        # 6 student scenarios (repeated across 30 students)
+        # 6 student scenarios with SIES GST autonomous fields
+        # (label, attendance, marks, gpa, assign_pct, failed_subjects,
+        #  ise, mse, ese, tw, pr_or, failed_heads, ese_failed_heads,
+        #  prev_backlogs, earned, expected, required)
         SCENARIOS = [
-            # (label, attendance, marks, gpa, assign_pct, failed, earned, expected, required)
-            ('healthy',       92, 82, 7.8, 88, 0, 28, 30, 30),
-            ('attendance',    61, 70, 6.2, 72, 1, 22, 30, 30),
-            ('backlog',       78, 52, 5.1, 65, 3, 20, 30, 30),
-            ('credit_def',    80, 74, 6.8, 76, 1, 14, 30, 30),
-            ('assignment',    85, 71, 6.5, 45, 0, 25, 30, 30),
-            ('high_risk',     55, 44, 4.2, 40, 4, 12, 30, 30),
+            ('healthy',    92, 82, 7.8, 88, 0, 16, 17, 49, 22, 23, 0, 0, 0, 28, 30, 30),
+            ('attendance', 61, 70, 6.2, 72, 1, 14, 13, 43, 18, 19, 2, 1, 0, 22, 30, 30),
+            ('backlog',    78, 52, 5.1, 65, 3, 10, 9,  33, 16, 15, 5, 3, 2, 20, 30, 30),
+            ('credit_def', 80, 74, 6.8, 76, 1, 15, 14, 45, 21, 20, 1, 0, 0, 14, 30, 30),
+            ('assignment', 85, 71, 6.5, 45, 0, 14, 15, 42, 20, 21, 0, 0, 0, 25, 30, 30),
+            ('high_risk',  55, 44, 4.2, 40, 4,  8,  7, 29, 12, 11, 8, 5, 4, 12, 30, 30),
         ]
 
-        def heuristic_risk(att, marks, gpa, assign, failed):
-            score = 0.15
-            if att < 75:   score += 0.28
-            if failed >= 2: score += 0.22
-            if gpa < 5:    score += 0.18
-            if assign < 60: score += 0.12
-            if marks < 50: score += 0.10
-            return min(round(score, 4), 0.97)
+        def heuristic_risk(att, marks, gpa, assign, failed, fh=0, ese_fh=0):
+            """Match the inference.py 4-level heuristic."""
+            score = 0.10
+            if att < 60:    score += 0.25
+            elif att < 75:  score += 0.15
+            elif att < 80:  score += 0.05
+            if failed >= 4: score += 0.20
+            elif failed >= 2: score += 0.12
+            if fh >= 8:     score += 0.20
+            elif fh >= 5:   score += 0.12
+            elif fh >= 3:   score += 0.06
+            if ese_fh >= 5: score += 0.15
+            elif ese_fh >= 3: score += 0.08
+            if gpa < 4:     score += 0.15
+            elif gpa < 5:   score += 0.08
+            elif gpa < 6:   score += 0.03
+            if assign < 40: score += 0.10
+            elif assign < 60: score += 0.05
+            return min(round(score, 4), 0.95)
 
         def risk_level(prob):
-            if prob < 0.40: return RiskLevel.low
-            if prob < 0.70: return RiskLevel.medium
-            return RiskLevel.high
+            """Match the inference.py 4-level thresholds (0.25/0.50/0.75)."""
+            if prob < 0.25: return RiskLevel.low
+            if prob < 0.50: return RiskLevel.medium
+            if prob < 0.75: return RiskLevel.high
+            return RiskLevel.critical
+
+        # Branch mapping for student profiles
+        BRANCH_MAP = {
+            'B.Tech CS': 'Computer Science',
+            'B.Tech ME': 'Mechanical Engineering',
+            'B.Tech ECE': 'Electronics & Telecom',
+        }
 
         now = datetime.now(timezone.utc)
         term = '2024-SEM1'
 
         for i, (user, profile) in enumerate(students):
-            sc_label, att, mrk, gpa, asgn, fail, earned, expected, required = SCENARIOS[i % len(SCENARIOS)]
+            (sc_label, att, mrk, gpa, asgn, fail,
+             ise, mse, ese, tw, pr_or, fh, ese_fh,
+             prev_bl, earned, expected, required) = SCENARIOS[i % len(SCENARIOS)]
+
             # Add a little variation so students differ slightly
             rng = random.Random(profile.student_id)
             att   = max(0,   min(100, att   + rng.randint(-5, 5)))
@@ -286,13 +311,29 @@ def seed():
             gpa   = max(0.0, min(10.0, round(gpa + rng.uniform(-0.3, 0.3), 1)))
             asgn  = max(0,   min(100, asgn  + rng.randint(-5, 5)))
             earned = max(0,  earned + rng.randint(-2, 2))
+            ise  = max(0, min(20, ise + rng.randint(-2, 2)))
+            mse  = max(0, min(20, mse + rng.randint(-2, 2)))
+            ese  = max(0, min(60, ese + rng.randint(-3, 3)))
+            tw   = max(0, min(25, tw  + rng.randint(-2, 2)))
+            pr_or = max(0, min(25, pr_or + rng.randint(-2, 2)))
 
-            # Academic record
+            # Update student profile with SIES GST fields
+            profile.branch = BRANCH_MAP.get(profile.program, profile.program)
+            profile.admission_year = 2024 - ((profile.semester + 1) // 2 - 1)
+            profile.current_year = (profile.semester + 1) // 2
+            profile.regulation = 'R19' if profile.admission_year < 2024 else 'R24'
+            profile.academic_status = 'CLEAR'
+
+            # Academic record with full SIES GST fields
             academic = AcademicRecord(
                 student_id=profile.student_id,
                 term=term, recorded_at=now,
                 attendance=att, marks=mrk, gpa=gpa,
                 assignment_completion=asgn, failed_subjects=fail,
+                ise_marks=ise, mse_marks=mse, ese_marks=ese,
+                tw_marks=tw, pr_or_marks=pr_or,
+                failed_heads=fh, ese_failed_heads=ese_fh,
+                previous_backlogs=prev_bl,
                 source='seed',
             )
             db.add(academic)
@@ -308,8 +349,9 @@ def seed():
             db.add(credit)
             db.flush()
 
+
             # Risk snapshot (heuristic — model may not be trained yet)
-            prob = heuristic_risk(att, mrk, gpa, asgn, fail)
+            prob = heuristic_risk(att, mrk, gpa, asgn, fail, fh, ese_fh)
             try:
                 from app.risk.inference import ModelService
                 svc = ModelService.get()

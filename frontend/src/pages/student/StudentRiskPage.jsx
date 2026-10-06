@@ -1,11 +1,10 @@
-/**
- * StudentRiskPage — risk probability gauge + sparkline trend chart.
- */
 import authService from '../../services/auth'
-import { useCurrentRisk, useRiskHistory, useExplanation } from '../../services/hooks'
+import { useCurrentRisk, useRiskHistory, useExplanation, useStudent } from '../../services/hooks'
 import { Spinner, ErrorBanner } from '../../components/ui'
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { Brain } from 'lucide-react'
+import WhatIfSimulator from '../../components/WhatIfSimulator'
+import RemedialTargetsCard from '../../components/RemedialTargetsCard'
 
 const RISK_COLOR = { HIGH: '#f43f5e', MEDIUM: '#f59e0b', LOW: '#10b981' }
 const IMPACT_COLOR = { high: '#f43f5e', medium: '#f59e0b', low: '#10b981' }
@@ -14,7 +13,8 @@ export default function StudentRiskPage() {
   const user = authService.getUser()
   const sid = user?.student_id
 
-  const { data: risk,    loading: rLoad, error: rErr } = useCurrentRisk(sid)
+  const { data: student }                               = useStudent(sid)
+  const { data: risk,    loading: rLoad, error: rErr, refetch: refetchRisk } = useCurrentRisk(sid)
   const { data: history }                               = useRiskHistory(sid)
   const { data: explain }                               = useExplanation(sid)
 
@@ -28,10 +28,10 @@ export default function StudentRiskPage() {
   if (rLoad) return <Spinner text="Loading risk data…" />
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" style={{ paddingBottom: '2.5rem' }}>
       <div className="page-header">
-        <h1 className="page-title">Risk Profile</h1>
-        <p className="page-subtitle">Your current dropout risk score and trend over time</p>
+        <h1 className="page-title">Risk Profile & Prescriptive Recovery</h1>
+        <p className="page-subtitle">Your dropout risk assessment, counterfactual What-If simulator, and SIES GST ESE passing safety targets</p>
       </div>
 
       {rErr && <ErrorBanner message={rErr} />}
@@ -110,6 +110,31 @@ export default function StudentRiskPage() {
         )}
 
       </div>
+
+      {/* Feature 1: 2026 Prescriptive What-If Counterfactual Simulator */}
+      {sid && (
+        <div style={{ marginTop: '1.75rem' }}>
+          <WhatIfSimulator
+            studentId={sid}
+            initialData={{
+              current_risk_prob: risk?.risk_probability,
+              attendance: student?.latest_academic_record?.attendance,
+              marks: student?.latest_academic_record?.marks,
+              assignment_completion: student?.latest_academic_record?.assignment_completion,
+              failed_heads: student?.latest_academic_record?.failed_heads,
+            }}
+            onGoalCommitted={refetchRisk}
+          />
+        </div>
+      )}
+
+      {/* Feature 2: SIES GST Autonomous ESE Passing Targets */}
+      {sid && (
+        <div style={{ marginTop: '1.75rem' }}>
+          <RemedialTargetsCard studentId={sid} />
+        </div>
+      )}
     </div>
   )
 }
+

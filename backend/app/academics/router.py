@@ -37,6 +37,10 @@ class AcademicUpdateRequest(BaseModel):
     ise_marks:             Optional[float] = None
     mse_marks:             Optional[float] = None
     ese_marks:             Optional[float] = None
+    tw_marks:              Optional[float] = None
+    pr_or_marks:           Optional[float] = None
+    grace_marks:           Optional[float] = 0.0
+    ordinance_applied:     Optional[str]   = None
     failed_heads:          Optional[int]   = 0
     ese_failed_heads:      Optional[int]   = 0
     backlog_credits:       Optional[float] = 0.0
@@ -67,20 +71,31 @@ def update_academic(
             raise HTTPException(403, 'Not your assigned student')
 
     now  = datetime.now(timezone.utc)
-    term = body.term or now.strftime('%Y-S%m')
+    term = body.term or f"SEM{profile.semester or 1}"
 
-    # Persist academic record
+    # Statutory limits clamping
+    ise_val = min(20.0, max(0.0, float(body.ise_marks))) if body.ise_marks is not None else None
+    mse_val = min(20.0, max(0.0, float(body.mse_marks))) if body.mse_marks is not None else None
+    ese_val = min(60.0, max(0.0, float(body.ese_marks))) if body.ese_marks is not None else None
+    tw_val = min(25.0, max(0.0, float(body.tw_marks))) if body.tw_marks is not None else None
+    pr_or_val = min(25.0, max(0.0, float(body.pr_or_marks))) if body.pr_or_marks is not None else None
+
+    # Persist academic record with SIES GST autonomous components
     academic = AcademicRecord(
         student_id=student_id,
         term=term,
-        attendance=body.attendance,
-        marks=body.marks,
-        gpa=body.gpa,
-        assignment_completion=body.assignment_completion,
-        failed_subjects=body.failed_subjects,
-        ise_marks=body.ise_marks,
-        mse_marks=body.mse_marks,
-        ese_marks=body.ese_marks,
+        attendance=min(100.0, max(0.0, body.attendance)),
+        marks=min(100.0, max(0.0, body.marks)),
+        gpa=min(10.0, max(0.0, body.gpa)),
+        assignment_completion=min(100.0, max(0.0, body.assignment_completion)),
+        failed_subjects=max(0, body.failed_subjects),
+        ise_marks=ise_val,
+        mse_marks=mse_val,
+        ese_marks=ese_val,
+        tw_marks=tw_val,
+        pr_or_marks=pr_or_val,
+        grace_marks=body.grace_marks or 0.0,
+        ordinance_applied=body.ordinance_applied,
         failed_heads=body.failed_heads or 0,
         ese_failed_heads=body.ese_failed_heads or 0,
         backlog_credits=body.backlog_credits or 0.0,
@@ -116,13 +131,22 @@ def update_academic(
     except Exception:
         pass  # Non-fatal: regulation eval failure should not block record save
 
-    # Inference
+    # Inference with complete SIES GST autonomous features
     features = {
-        'attendance':            body.attendance,
-        'marks':                 body.marks,
-        'gpa':                   body.gpa,
-        'assignment_completion':  body.assignment_completion,
-        'failed_subjects':       body.failed_subjects,
+        'attendance':                       body.attendance,
+        'attendance_percentage':            body.attendance,
+        'marks':                            body.marks,
+        'gpa':                              body.gpa,
+        'assignment_completion':            body.assignment_completion,
+        'assignment_completion_percentage': body.assignment_completion,
+        'failed_subjects':                  body.failed_subjects,
+        'failed_heads':                     body.failed_heads or 0,
+        'ese_failed_heads':                 body.ese_failed_heads or 0,
+        'backlog_credits':                  body.backlog_credits or 0.0,
+        'previous_backlogs':                body.previous_backlogs or 0,
+        'previous_failed_heads':            body.previous_failed_heads or 0,
+        'earned_credits':                   cs['earned'],
+        'expected_credits':                 cs['expected'],
     }
     svc    = ModelService.get()
     result = svc.predict(features)
@@ -130,7 +154,7 @@ def update_academic(
         'LOW':      RiskLevel.low,
         'MEDIUM':   RiskLevel.medium,
         'HIGH':     RiskLevel.high,
-        'CRITICAL': RiskLevel.high,  # Map CRITICAL to high for RiskHistory enum
+        'CRITICAL': RiskLevel.critical,
     }
 
     snapshot = RiskHistory(

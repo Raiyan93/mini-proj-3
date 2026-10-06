@@ -1,11 +1,12 @@
 /**
- * FacultyStudentsPage — list of assigned students with live risk badges.
+ * FacultyStudentsPage — Institutional Course Enrollment Roster
+ * Clean data table for faculty members to monitor academic performance and risks.
  */
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStudents } from '../../services/hooks'
 import { RiskBadge, Spinner, ErrorBanner } from '../../components/ui'
-import { Search, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { Search, ChevronRight, GraduationCap } from 'lucide-react'
 
 export default function FacultyStudentsPage() {
   const { data, loading, error } = useStudents()
@@ -13,58 +14,98 @@ export default function FacultyStudentsPage() {
 
   const students = (data || []).filter(s =>
     s.name?.toLowerCase().includes(q.toLowerCase()) ||
-    s.roll_no?.toLowerCase().includes(q.toLowerCase())
+    s.roll_no?.toLowerCase().includes(q.toLowerCase()) ||
+    s.program?.toLowerCase().includes(q.toLowerCase())
   )
 
   return (
-    <div className="animate-fade-in">
-      <div className="page-header">
-        <h1 className="page-title">My Students</h1>
-        <p className="page-subtitle">Assigned students in your courses</p>
+    <div className="animate-fade-in" style={{ paddingBottom: '2.5rem' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h1 className="page-title">Enrolled Students Roster</h1>
+          <p className="page-subtitle">Students registered across your assigned courses and departments</p>
+        </div>
+        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', padding: '0.3rem 0.6rem', borderRadius: 4, border: '1px solid var(--border)' }}>
+          Total Enrolled: {students.length}
+        </span>
       </div>
 
       {error && <ErrorBanner message={error} />}
 
-      <div style={{ position: 'relative', marginBottom: '1.25rem' }}>
-        <Search size={15} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-        <input
-          style={{ width: '100%', padding: '0.625rem 0.875rem 0.625rem 2.25rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '0.5rem', color: 'var(--text-primary)', fontSize: '0.875rem', boxSizing: 'border-box' }}
-          placeholder="Search by name or roll no…"
-          value={q} onChange={e => setQ(e.target.value)}
-        />
+      <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+        <div style={{ position: 'relative', maxWidth: 380 }}>
+          <Search size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            className="form-input"
+            style={{ paddingLeft: '2rem' }}
+            placeholder="Search by student name or roll number…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+        </div>
       </div>
 
-      {loading ? <Spinner /> : (
+      {loading ? (
+        <Spinner text="Loading enrolled student roster…" />
+      ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-elevated)' }}>
-                {['Name', 'Roll No', 'Program', 'Semester', 'Risk', ''].map(h => (
-                  <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {students.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>No students found.</td></tr>
-              ) : students.map((s, i) => (
-                <tr key={s.student_id} style={{ borderTop: '1px solid var(--border)', transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding: '0.75rem 1rem', fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.875rem' }}>{s.name}</td>
-                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.8125rem', fontFamily: 'monospace' }}>{s.roll_no}</td>
-                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>{s.program}</td>
-                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>Sem {s.semester}</td>
-                  <td style={{ padding: '0.75rem 1rem' }}><RiskBadge level={s.latest_risk_level} /></td>
-                  <td style={{ padding: '0.75rem 1rem' }}>
-                    <Link to={`/students/${s.student_id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#3b82f6', fontSize: '0.8125rem', textDecoration: 'none' }}>
-                      View <ChevronRight size={12} />
-                    </Link>
-                  </td>
+          <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+            <table className="data-table" style={{ minWidth: 760 }}>
+              <thead>
+                <tr>
+                  <th style={{ minWidth: 160 }}>Student</th>
+                  <th style={{ minWidth: 110 }}>Roll Number</th>
+                  <th style={{ minWidth: 160 }}>Branch & Program</th>
+                  <th style={{ textAlign: 'center', minWidth: 80 }}>Semester</th>
+                  <th style={{ textAlign: 'center', minWidth: 110 }}>Academic Risk Status</th>
+                  <th style={{ textAlign: 'right', minWidth: 110, paddingRight: '1.25rem' }}>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {students.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                      No enrolled students match your search criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  students.map(s => (
+                    <tr key={s.student_id}>
+                      <td>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>
+                          {s.name}
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          {s.email}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                        {s.roll_no}
+                      </td>
+                      <td style={{ color: 'var(--text-secondary)' }}>
+                        {s.program || 'B.Tech CS'}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        Sem {s.semester}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <RiskBadge level={s.latest_risk_level} />
+                      </td>
+                      <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
+                        <Link
+                          to={`/students/${s.student_id}`}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.65rem', textDecoration: 'none', display: 'inline-flex', whiteSpace: 'nowrap' }}
+                        >
+                          View Profile <ChevronRight size={12} />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

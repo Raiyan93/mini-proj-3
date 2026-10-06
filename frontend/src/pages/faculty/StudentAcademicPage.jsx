@@ -54,6 +54,7 @@ export default function StudentAcademicPage() {
     attendance: 75, marks: 60, gpa: 6.0,
     assignment_completion: 70, failed_subjects: 0,
     ise_marks: '', mse_marks: '', ese_marks: '',
+    tw_marks: '', pr_or_marks: '',
     failed_heads: 0, ese_failed_heads: 0, backlog_credits: 0,
     previous_backlogs: 0, previous_failed_heads: 0,
     earned_credits: 20, expected_credits: 24, required_credits: 24,
@@ -65,19 +66,22 @@ export default function StudentAcademicPage() {
   useEffect(() => {
     if (student) {
       const acad = student.latest_academic_record
+      const studentSem = student.semester || 1
       
       if (acad) {
         setForm(f => ({
           ...f,
-          term: acad.term || f.term,
+          term: acad.term && !acad.term.includes('S08') ? acad.term : `SEM${studentSem}`,
           attendance: acad.attendance ?? f.attendance,
           marks: acad.marks ?? f.marks,
           gpa: acad.gpa ?? f.gpa,
           assignment_completion: acad.assignment_completion ?? f.assignment_completion,
           failed_subjects: acad.failed_subjects ?? f.failed_subjects,
-          ise_marks: acad.ise_marks ?? '',
-          mse_marks: acad.mse_marks ?? '',
-          ese_marks: acad.ese_marks ?? '',
+          ise_marks: acad.ise_marks != null ? Math.min(20, Number(acad.ise_marks)) : '',
+          mse_marks: acad.mse_marks != null ? Math.min(20, Number(acad.mse_marks)) : '',
+          ese_marks: acad.ese_marks != null ? Math.min(60, Number(acad.ese_marks)) : '',
+          tw_marks: acad.tw_marks != null ? Math.min(25, Number(acad.tw_marks)) : '',
+          pr_or_marks: acad.pr_or_marks != null ? Math.min(25, Number(acad.pr_or_marks)) : '',
           failed_heads: acad.failed_heads ?? 0,
           ese_failed_heads: acad.ese_failed_heads ?? 0,
           backlog_credits: acad.backlog_credits ?? 0,
@@ -115,6 +119,8 @@ export default function StudentAcademicPage() {
         ise_marks:             toNum(form.ise_marks),
         mse_marks:             toNum(form.mse_marks),
         ese_marks:             toNum(form.ese_marks),
+        tw_marks:              toNum(form.tw_marks),
+        pr_or_marks:           toNum(form.pr_or_marks),
         failed_heads:          Number(form.failed_heads) || 0,
         ese_failed_heads:      Number(form.ese_failed_heads) || 0,
         backlog_credits:       Number(form.backlog_credits) || 0,
@@ -189,9 +195,18 @@ export default function StudentAcademicPage() {
                 </p>
               </div>
             </div>
-            <p style={{ margin: '1rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-              ✅ Academic record saved. Regulation engine evaluated official status. ML model predicted risk. Go back to student profile to view the full analysis.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                ✅ Academic record saved & SIES GST Autonomous Risk Engine re-evaluated.
+              </p>
+              <Link
+                to={`/students/${id}`}
+                className="btn btn-primary"
+                style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', textDecoration: 'none' }}
+              >
+                View Updated Student Dossier →
+              </Link>
+            </div>
           </div>
         )
       })()}
@@ -224,10 +239,12 @@ export default function StudentAcademicPage() {
         </SECTION>
 
         {/* Section B: SIES GST Mark Breakdown */}
-        <SECTION title="B. SIES GST Mark Breakdown (ISE / MSE / ESE)">
+        <SECTION title="B. SIES GST Mark Breakdown (ISE 20 / MSE 20 / ESE 60 / TW 25 / PR 25)">
           <Field label="ISE Marks (out of 20)" field="ise_marks" form={form} setForm={setForm} min={0} max={20} step={0.5} optional />
           <Field label="MSE Marks (out of 20)" field="mse_marks" form={form} setForm={setForm} min={0} max={20} step={0.5} optional />
           <Field label="ESE Marks (out of 60)" field="ese_marks" form={form} setForm={setForm} min={0} max={60} step={0.5} optional />
+          <Field label="Term Work (TW out of 25)" field="tw_marks" form={form} setForm={setForm} min={0} max={25} step={0.5} optional />
+          <Field label="Practical / Oral (PR/OR out of 25)" field="pr_or_marks" form={form} setForm={setForm} min={0} max={25} step={0.5} optional />
         </SECTION>
 
         {/* Section C: Backlogs & Failed Heads */}

@@ -134,3 +134,43 @@ def test_patch_status_persists(client, iv_tokens):
                               json={'status': 'IN_PROGRESS'}, headers=h)
     assert patch_resp.status_code == 200, patch_resp.text
     assert patch_resp.json()['status'] == 'IN_PROGRESS'
+
+
+def test_student_can_toggle_own_checklist_progress(client, iv_tokens):
+    fac_tok, stu_tok, sid = iv_tokens
+    # 1. Faculty creates intervention with 2 checklist items
+    create_resp = client.post('/api/interventions', json={
+        'student_id': sid,
+        'type': 'BACKLOG_PLAN',
+        'reason': 'KT clearance for CS302',
+        'target_course_code': 'CS302',
+        'target_course_name': 'Data Structures',
+        'milestone_goal': 'Pass remedial exam',
+        'action_checklist': [
+            {'id': 1, 'task': 'Task 1', 'completed': False},
+            {'id': 2, 'task': 'Task 2', 'completed': False},
+        ],
+    }, headers={'Authorization': f'Bearer {fac_tok}'})
+    assert create_resp.status_code == 201
+    iv_id = create_resp.json()['id']
+    assert create_resp.json()['progress_pct'] == 0
+
+    # 2. Student toggles Task 1
+    toggle_resp1 = client.patch(f'/api/interventions/{iv_id}',
+                                json={'toggle_item_id': 1},
+                                headers={'Authorization': f'Bearer {stu_tok}'})
+    assert toggle_resp1.status_code == 200, toggle_resp1.text
+    b1 = toggle_resp1.json()
+    assert b1['progress_pct'] == 50
+    assert b1['status'] == 'IN_PROGRESS'
+    assert b1['action_checklist'][0]['completed'] is True
+
+    # 3. Student toggles Task 2 -> 100% progress and auto-completed
+    toggle_resp2 = client.patch(f'/api/interventions/{iv_id}',
+                                json={'toggle_item_id': 2},
+                                headers={'Authorization': f'Bearer {stu_tok}'})
+    assert toggle_resp2.status_code == 200
+    b2 = toggle_resp2.json()
+    assert b2['progress_pct'] == 100
+    assert b2['status'] == 'COMPLETED'
+

@@ -39,8 +39,36 @@ def get_db():
         db.close()
 
 
+def _auto_migrate_sqlite():
+    """Ensure newly added columns exist in SQLite without requiring manual migrations."""
+    import sqlite3
+    from app.config import DB_PATH
+    if os.path.exists(DB_PATH):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("PRAGMA table_info(interventions)")
+            cols = {row[1] for row in c.fetchall()}
+            if cols:
+                if "baseline_risk_prob" not in cols:
+                    c.execute("ALTER TABLE interventions ADD COLUMN baseline_risk_prob REAL DEFAULT 0.0")
+                if "current_risk_prob" not in cols:
+                    c.execute("ALTER TABLE interventions ADD COLUMN current_risk_prob REAL DEFAULT 0.0")
+                if "risk_delta" not in cols:
+                    c.execute("ALTER TABLE interventions ADD COLUMN risk_delta REAL DEFAULT 0.0")
+                if "efficacy_status" not in cols:
+                    c.execute("ALTER TABLE interventions ADD COLUMN efficacy_status TEXT DEFAULT 'EVALUATING'")
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("SQLite auto-migration note: %s", e)
+
+
 def init_db():
     """Create all tables if they don't exist. Called at app startup."""
     # Import models so SQLAlchemy registers them with Base before create_all
     from app.db import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    _auto_migrate_sqlite()
+

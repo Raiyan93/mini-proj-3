@@ -81,3 +81,19 @@ export function useCourses() {
 export function useProgression(studentId) {
   return useFetch(studentId ? `/students/${studentId}/progression` : null)
 }
+
+/** Velocity Early-Warning Radar alerts */
+export function useVelocityAlerts() {
+  return useFetch('/risk/velocity-alerts')
+}
+
+/** Student specific velocity trajectory */
+export function useStudentVelocity(studentId) {
+  return useFetch(studentId ? `/risk/${studentId}/velocity` : null)
+}
+
+/** Credit graduation path optimizer */
+export function useOptimizedGraduationPath(studentId) {
+  return useFetch(studentId ? `/credits/${studentId}/optimized-path` : null)
+}
+

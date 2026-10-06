@@ -46,9 +46,13 @@ export default function UploadsPage() {
 
       {/* Template hint */}
       <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem' }}>
-        <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
           <strong style={{ color: 'var(--text-secondary)' }}>Required columns:</strong>{' '}
           <code style={{ color: '#3b82f6' }}>roll_no, branch, admission_year, current_year, semester, regulation, attendance_percentage, gpa, ise_marks, mse_marks, ese_marks, assignment_completion_percentage, earned_credits, expected_credits</code>
+        </p>
+        <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+          <strong style={{ color: 'var(--text-secondary)' }}>SIES GST Autonomous Optional:</strong>{' '}
+          <code style={{ color: '#059669' }}>tw_marks, pr_or_marks, failed_heads, ese_failed_heads, previous_backlogs, is_dse, activity_points</code>
         </p>
       </div>
 
